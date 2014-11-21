@@ -1,0 +1,151 @@
+<html>
+<head>
+    <script type="text/javascript" src="jquery-1.11.1.min.js"></script>
+    <script type="text/javascript" src="smoothie.js"></script>
+    <script type="text/javascript">
+        var netdata_sets = [new TimeSeries(), new TimeSeries()];
+        var diskdata_sets = [new TimeSeries(), new TimeSeries()];
+        var vmstatdata_sets = [new TimeSeries(), new TimeSeries()];
+        var ws = 0.0;
+        var rs = 0.0;
+        var first_run = 0;
+        var stats = 0;
+        var json_stats;
+
+        function get_random_color2()
+        {
+            var r = function () { return Math.floor(Math.random()*256) };
+            var x = r() + "," + r() + "," + r();
+            var s1 = 'rgb('+x+')';
+            var s2 = 'rgba('+x+', 0.25)'
+            return [s1, s2];
+        }
+
+        function get_json_stats() {
+            $.ajaxSetup({async:false});
+            $.getJSON('stats.json', {}, function(data){
+                json_stats = data;
+            });
+            return json_stats;
+        }
+
+        function createTimeline() {
+            var s = get_json_stats();
+            for(var k in s.ifstat) {
+                if(k != "nop") {
+                    netdata_sets.push(new TimeSeries())
+                }
+            }
+            for(var k in s.vmstat) {
+                if(k != "nop") {
+                    vmstatdata_sets.push(new TimeSeries())
+                }
+            }
+            /* disk stats on bo/bi write/read */
+            diskdata_sets.push(new TimeSeries())
+            diskdata_sets.push(new TimeSeries())
+
+            var netchart = new SmoothieChart({millisPerPixel:35,
+                grid:{fillStyle:'rgba(0,0,0,0.75)',strokeStyle:'transparent',
+                    //strokeStyle:'rgba(119,119,119,0.86)',
+                    millisPerLine:2000},
+                labels:{fillStyle:'rgba(255,255,255,0.84)'}});
+
+            var vmstatchart = new SmoothieChart({millisPerPixel:35,
+                grid:{fillStyle:'rgba(0,0,0,0.75)',strokeStyle:'transparent',
+                    millisPerLine:2000},
+                labels:{fillStyle:'rgba(255,255,255,0.84)'}});
+
+            var diskchart = new SmoothieChart({millisPerPixel:35,
+                grid:{fillStyle:'rgba(0,0,0,0.75)',strokeStyle:'transparent',
+                    millisPerLine:2000},
+                labels:{fillStyle:'rgba(255,255,255,0.84)'}});
+
+            var i = 0;
+            var brightness;
+            for(var k in s.ifstat) {
+                if(k != "nop") {
+                    var rcolor = get_random_color2();
+                    netchart.addTimeSeries(netdata_sets[i], {
+                        strokeStyle: rcolor[1], fillStyle: rcolor[1], lineWidth: 2
+                    });
+                    $('#netchart_titles').append(
+                        '<span style="color:'+rcolor[0]+';">'+k+'</span>  ');
+                    i += 1;
+                }
+            }
+            var i = 0;
+            var brightness;
+            for(var k in s.vmstat) {
+                if(k != "nop") {
+                    var rcolor = get_random_color2();
+                    vmstatchart.addTimeSeries(vmstatdata_sets[i], {
+                        strokeStyle: rcolor[1], fillStyle: rcolor[1], lineWidth: 2
+                    });
+                    $('#vmstatchart_titles').append(
+                        '<span style="color:'+rcolor[0]+';">'+k+'</span>  ');
+                    i += 1;
+                }
+            }
+            var rcolor1 = get_random_color2();
+            var rcolor2 = get_random_color2();
+            diskchart.addTimeSeries(diskdata_sets[0], { strokeStyle: rcolor1[0], fillStyle: rcolor1[1], lineWidth: 2});
+            $('#diskchart_titles').append('<span style="color:'+rcolor1[0]+';">read</span>  ');
+            diskchart.addTimeSeries(diskdata_sets[1], { strokeStyle: rcolor2[0], fillStyle: rcolor2[1], lineWidth: 2});
+            $('#diskchart_titles').append('<span style="color:'+rcolor2[0]+';">write</span> ');
+
+            diskchart.streamTo(document.getElementById("diskchart"), 800);
+            vmstatchart.streamTo(document.getElementById("vmstatchart"), 800);
+            netchart.streamTo(document.getElementById("netchart"), 800);
+        }
+        setInterval(function() {
+            stats = get_json_stats();
+            console.log(stats);
+            cur_time = new Date().getTime();
+            var i = 0;
+            for(var k in stats.ifstat) {
+                if(k != "nop") {
+                    $('#'+k+'_title').text(k);
+                    netdata_sets[i].append(cur_time, parseFloat(stats.ifstat[k]))
+                    i += 1;
+                }
+            }
+        }, 800);
+        setInterval(function() {
+            stats = get_json_stats();
+            cur_time = new Date().getTime();
+            var i = 0;
+            for(var k in stats.vmstat) {
+                if(k != "nop") {
+                    $('#'+k+'_title').text(k);
+                    vmstatdata_sets[i].append(cur_time, parseFloat(stats.vmstat[k]))
+                    i += 1;
+                }
+            }
+        }, 800);
+        setInterval(function() {
+            stats = get_json_stats();
+            cur_time = new Date().getTime();
+            var i = 0;
+            $('#bi_title').text('read');
+            $('#bo_title').text('write');
+            diskdata_sets[0].append(cur_time, parseFloat(stats.vmstat['bi']))
+            diskdata_sets[1].append(cur_time, parseFloat(stats.vmstat['bo']))
+        }, 800);
+    </script>
+</head>
+<body onload="createTimeline()" style="background-color:#111; text-align: center; padding:0; margin:0">
+    <div>
+        <div id="netchart_titles" style="color:#f9f9f9; font-family:arial; margin-top: 10px;"></div>
+        <canvas id="netchart" width="800" height="200"></canvas>
+    </div>
+    <div>
+        <div id="diskchart_titles" style="color:#f9f9f9; font-family:arial; margin-top: 10px;"></div>
+        <canvas id="diskchart" width="800" height="200"></canvas>
+    </div>
+    <div>
+        <div id="vmstatchart_titles" style="color:#f9f9f9; font-family:arial; margin-top: 10px;"></div>
+        <canvas id="vmstatchart" width="800" height="200"></canvas>
+    </div>
+</body>
+</html>
